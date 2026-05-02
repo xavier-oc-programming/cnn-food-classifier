@@ -171,6 +171,8 @@ Before training I benchmarked three environments to choose the most efficient op
 
 I selected Colab for speed. The main risk was session disconnection after ~90 minutes of inactivity, so I implemented checkpoint saving after every epoch using `tf.keras.callbacks.ModelCheckpoint`. If the session dropped, training resumed from the last saved checkpoint rather than starting from scratch. I set a timer every 80 minutes to keep the session alive during training.
 
+During training I also encountered GPU memory overflow on the T4 with a batch size of 32 — loading 32 images at 224×224×3 alongside the MobileNetV2 activations exceeded available VRAM. Reducing the batch size to 16 resolved the issue without meaningfully affecting convergence.
+
 ---
 
 ## 6. Training
@@ -180,7 +182,7 @@ I selected Colab for speed. The main risk was session disconnection after ~90 mi
 | Parameter | Value |
 |---|---|
 | Epochs | 10 (with early stopping, patience=3) |
-| Batch size | 32 |
+| Batch size | 16 |
 | Optimizer | Adam |
 | Learning rate | 0.001 |
 | Loss function | sparse_categorical_crossentropy |
