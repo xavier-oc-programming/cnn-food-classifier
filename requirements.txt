@@ -1,0 +1,9 @@
+tensorflow
+tensorflow-datasets
+gradio
+Pillow
+numpy
+matplotlib
+seaborn
+scikit-learn
+jupyter
