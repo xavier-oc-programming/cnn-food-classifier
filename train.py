@@ -21,7 +21,7 @@ MODEL_PATH = 'food_classifier.h5'
 
 IMG_SIZE = 224      # MobileNetV2 was designed for 224x224 images
 BATCH_SIZE = 32     # how many images to process at once before updating weights
-EPOCHS = 10         # how many times to loop through the full training set
+EPOCHS = 20         # how many times to loop through the full training set
 NUM_CLASSES = 101   # one output per food category
 
 # Random transforms applied to training images each epoch so the model sees
@@ -69,7 +69,7 @@ def build_model():
 
     model = tf.keras.Model(inputs, outputs)
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
+        optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
         loss='sparse_categorical_crossentropy',  # standard loss for multi-class classification
         metrics=['accuracy']
     )

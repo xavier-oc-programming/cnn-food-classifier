@@ -7,3 +7,5 @@ venv/
 *.egg-info/
 ~/tensorflow_datasets/
 checkpoints/
+checkpoints_finetune/
+.vscode/

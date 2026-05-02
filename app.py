@@ -3,6 +3,12 @@ import tensorflow as tf
 import numpy as np
 from PIL import Image
 
+import os
+if not os.path.exists('food_classifier.h5'):
+    raise FileNotFoundError(
+        'food_classifier.h5 not found. '
+        'Run train.py or download the model from the releases page.'
+    )
 model = tf.keras.models.load_model('food_classifier.h5')
 IMG_SIZE = 224
 

@@ -87,6 +87,8 @@ cnn-food-classifier/
     └── 03_confusion_matrix.png   # Top 20 most confused classes
 ```
 
+Training checkpoints are saved locally after each epoch via the `ModelCheckpoint` callback and are not committed to the repository. To retrain from scratch, run `python train.py`. Checkpoints will be saved to `checkpoints/` and `checkpoints_finetune/` automatically.
+
 ---
 
 ## 3. Model architecture
