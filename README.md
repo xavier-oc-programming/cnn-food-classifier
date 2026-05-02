@@ -171,7 +171,7 @@ Before training I benchmarked three environments to choose the most efficient op
 
 I selected Colab for speed. The main risk was session disconnection after ~90 minutes of inactivity, so I implemented checkpoint saving after every epoch using `tf.keras.callbacks.ModelCheckpoint`. If the session dropped, training resumed from the last saved checkpoint rather than starting from scratch. To prevent the session timing out due to inactivity, I ran a separate [mouse jiggler program](#) I built — it moves the cursor in a small square and clicks every 2 seconds, keeping the session active throughout training.
 
-During training I also hit RAM crashes on the Colab free tier caused by loading the full 75,750-image dataset into memory each epoch. I resolved this by capping `steps_per_epoch=500` and `validation_steps=100` in `model.fit()`, which limits each epoch to 500 training batches and 100 validation batches rather than exhausting the full dataset. This kept memory usage stable throughout the run without significantly affecting convergence.
+During training I also hit RAM crashes on the Colab free tier caused by loading the full 75,750-image dataset into memory each epoch. I resolved this by capping `steps_per_epoch=500` and `validation_steps=100` in `model.fit()`, which limits each epoch to 500 training batches (8,000 images) rather than the full 4,734 steps. Because each capped epoch only covers ~10.6% of the training data, I increased the total epoch count from 10 to 50 so the model still sees the equivalent of ~5 full passes through the dataset. Early stopping with `patience=3` ensures training halts as soon as validation accuracy plateaus, so the full 50 epochs will rarely all run.
 
 ---
 
@@ -181,7 +181,7 @@ During training I also hit RAM crashes on the Colab free tier caused by loading 
 
 | Parameter | Value |
 |---|---|
-| Epochs | 10 (with early stopping, patience=3) |
+| Epochs | 50 (with early stopping, patience=3) |
 | Batch size | 16 |
 | Steps per epoch | 500 |
 | Validation steps | 100 |
