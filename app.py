@@ -62,8 +62,7 @@ demo = gr.Interface(
         'Shows top 3 predictions with confidence scores.'
     ),
     examples=[],
-    theme=gr.themes.Soft()
 )
 
 if __name__ == '__main__':
-    demo.launch()
+    demo.launch(theme=gr.themes.Soft())
