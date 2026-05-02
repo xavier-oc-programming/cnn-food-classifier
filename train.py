@@ -9,7 +9,8 @@ from pathlib import Path
 from sklearn.metrics import confusion_matrix
 import time
 
-# Mixed precision: ~30% faster on M1 Metal and NVIDIA GPUs, no accuracy cost
+# Use 16-bit floats instead of 32-bit where possible — speeds up training on
+# M1 Metal and modern GPUs without affecting accuracy
 tf.keras.mixed_precision.set_global_policy('mixed_float16')
 
 PLOTS_DIR = Path('plots')
@@ -17,51 +18,66 @@ CHECKPOINT_DIR = Path('checkpoints')
 PLOTS_DIR.mkdir(exist_ok=True)
 CHECKPOINT_DIR.mkdir(exist_ok=True)
 MODEL_PATH = 'food_classifier.h5'
-IMG_SIZE = 224
-BATCH_SIZE = 32
-EPOCHS = 10
-NUM_CLASSES = 101
 
+IMG_SIZE = 224      # MobileNetV2 was designed for 224x224 images
+BATCH_SIZE = 32     # how many images to process at once before updating weights
+EPOCHS = 10         # how many times to loop through the full training set
+NUM_CLASSES = 101   # one output per food category
+
+# Random transforms applied to training images each epoch so the model sees
+# slight variations — helps it generalise rather than memorise
 augmentation = tf.keras.Sequential([
-    tf.keras.layers.RandomFlip('horizontal'),
-    tf.keras.layers.RandomRotation(0.1),
-    tf.keras.layers.RandomZoom(0.1),
+    tf.keras.layers.RandomFlip('horizontal'),   # mirror left-right
+    tf.keras.layers.RandomRotation(0.1),        # rotate up to ~36 degrees
+    tf.keras.layers.RandomZoom(0.1),            # zoom in or out slightly
 ])
 
 
 def preprocess(image, label):
+    # Resize to the fixed size the model expects, then scale pixels from
+    # 0–255 integers to 0.0–1.0 floats — networks train better on small numbers
     image = tf.image.resize(image, (IMG_SIZE, IMG_SIZE))
     image = tf.cast(image, tf.float32) / 255.0
     return image, label
 
 
 def build_model():
+    # MobileNetV2 is a lightweight CNN pretrained on 1.2M ImageNet images.
+    # We load it without its top classification layer so we can attach our own.
     base_model = tf.keras.applications.MobileNetV2(
         input_shape=(IMG_SIZE, IMG_SIZE, 3),
         include_top=False,
         weights='imagenet'
     )
-    # Freeze all pretrained layers — transfer learning stage 1
+    # Freeze the pretrained weights — we want to reuse what it already knows
+    # about edges, textures and shapes, not overwrite it
     base_model.trainable = False
 
     inputs = tf.keras.Input(shape=(IMG_SIZE, IMG_SIZE, 3))
+    # training=False keeps the base in inference mode while its weights are frozen
     x = base_model(inputs, training=False)
+
+    # Collapse the spatial feature map down to a single vector per image
     x = tf.keras.layers.GlobalAveragePooling2D()(x)
+    # Learn which features matter most for food classification
     x = tf.keras.layers.Dense(256, activation='relu')(x)
+    # Randomly drop 30% of connections during training to prevent overfitting
     x = tf.keras.layers.Dropout(0.3)(x)
-    # dtype float32 keeps the output numerically stable under mixed precision
+    # One score per class — softmax turns them into probabilities that sum to 1.
+    # float32 here prevents numerical errors that float16 can cause in softmax
     outputs = tf.keras.layers.Dense(NUM_CLASSES, activation='softmax', dtype='float32')(x)
 
     model = tf.keras.Model(inputs, outputs)
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss='sparse_categorical_crossentropy',
+        loss='sparse_categorical_crossentropy',  # standard loss for multi-class classification
         metrics=['accuracy']
     )
     return model
 
 
 def load_latest_checkpoint():
+    # If a previous training run was interrupted, pick up from the last saved epoch
     checkpoint_dir = Path('checkpoints')
     if not checkpoint_dir.exists():
         return None
@@ -74,6 +90,8 @@ def load_latest_checkpoint():
 
 
 def plot_training_curves(history):
+    # Plotting train vs validation accuracy shows whether the model is
+    # learning to generalise or just memorising the training data
     _, axes = plt.subplots(1, 2, figsize=(14, 5))
 
     axes[0].plot(history.history['loss'], label='Train Loss', color='steelblue')
@@ -99,12 +117,13 @@ def plot_training_curves(history):
 
 
 def plot_sample_predictions(model, val_dataset, class_names):
+    # Run 9 unseen validation images through the model and display the results
     images_batch, labels_batch = next(iter(val_dataset.take(1)))
     images_np = images_batch.numpy()[:9]
     labels_np = labels_batch.numpy()[:9]
 
     predictions = model.predict(images_np)
-    pred_indices = predictions.argmax(axis=1)
+    pred_indices = predictions.argmax(axis=1)  # pick the class with highest confidence
 
     fig, axes = plt.subplots(3, 3, figsize=(12, 12))
     for i, ax in enumerate(axes.flat):
@@ -127,6 +146,8 @@ def plot_sample_predictions(model, val_dataset, class_names):
 
 
 def plot_confusion_matrix(model, val_dataset, class_names):
+    # A confusion matrix shows which classes the model mixes up most often.
+    # Showing only the 20 most confused keeps it readable — 101x101 is too dense.
     all_true = []
     all_pred = []
 
@@ -140,7 +161,6 @@ def plot_confusion_matrix(model, val_dataset, class_names):
 
     cm = confusion_matrix(all_true, all_pred)
 
-    # Top 20 most confused classes (highest off-diagonal sum)
     off_diag = cm.copy()
     np.fill_diagonal(off_diag, 0)
     row_confusion = off_diag.sum(axis=1)
@@ -169,22 +189,25 @@ def plot_confusion_matrix(model, val_dataset, class_names):
 def main():
     start_time = time.time()
 
-    gpus = tf.config.list_physical_devices('GPU')
+    # Confirm Metal GPU is active and mixed precision is enabled before training
     print(f'TensorFlow: {tf.__version__}')
-    print(f'GPU devices: {gpus}')
+    print(f'GPU devices: {tf.config.list_physical_devices("GPU")}')
     print(f'Mixed precision policy: {tf.keras.mixed_precision.global_policy().name}')
     print('Loading Food-101 dataset...')
 
     (train_ds_raw, val_ds_raw), info = tfds.load(
         'food101',
         split=['train', 'validation'],
-        as_supervised=True,
-        with_info=True
+        as_supervised=True,   # returns (image, label) pairs
+        with_info=True        # also returns class names and dataset stats
     )
 
     class_names = info.features['label'].names
 
-    # No .cache() — caching 75k images at 224x224 float32 (~14GB) exceeds M1 16GB RAM
+    # Build the data pipelines.
+    # Images are preprocessed and augmented on the fly each epoch.
+    # .cache() is omitted — the full dataset at 224x224 is ~14GB and would
+    # exhaust the 16GB unified memory on an M1 Mac.
     train_dataset = (
         train_ds_raw
         .map(preprocess, num_parallel_calls=tf.data.AUTOTUNE)
@@ -192,7 +215,7 @@ def main():
         .batch(BATCH_SIZE)
         .map(lambda x, y: (augmentation(x, training=True), y),
              num_parallel_calls=tf.data.AUTOTUNE)
-        .prefetch(tf.data.AUTOTUNE)
+        .prefetch(tf.data.AUTOTUNE)  # prepare next batch while GPU trains on current
     )
 
     val_dataset = (
@@ -202,6 +225,7 @@ def main():
         .prefetch(tf.data.AUTOTUNE)
     )
 
+    # Resume from the latest checkpoint if training was previously interrupted
     model = load_latest_checkpoint()
     if model is None:
         print('Building model from scratch...')
@@ -210,12 +234,16 @@ def main():
     initial_epoch = len(list(Path('checkpoints').glob('epoch_*.h5')))
     print(f'Starting training from epoch {initial_epoch + 1}')
 
+    # Save the full model after every epoch so training can be resumed if interrupted
     checkpoint_cb = tf.keras.callbacks.ModelCheckpoint(
         filepath='checkpoints/epoch_{epoch:02d}.h5',
         save_weights_only=False,
         save_best_only=False,
         verbose=1
     )
+
+    # Stop training early if validation accuracy stops improving for 3 epochs,
+    # then restore the best weights seen during the run
     early_stopping_cb = tf.keras.callbacks.EarlyStopping(
         monitor='val_accuracy',
         patience=3,
