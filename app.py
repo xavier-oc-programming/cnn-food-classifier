@@ -38,6 +38,15 @@ CLASSES = [
     'sushi', 'tacos', 'takoyaki', 'tiramisu', 'tuna_tartare', 'waffles'
 ]
 
+CLASSES_MD = "\n".join(
+    "| " + " | ".join(
+        f"{i+1}. {CLASSES[i].replace('_', ' ').title()}"
+        for i in range(row, min(row + 3, len(CLASSES)))
+    ) + " |"
+    for row in range(0, len(CLASSES), 3)
+)
+CLASSES_MD = "| | | |\n|---|---|---|\n" + CLASSES_MD
+
 
 def predict(image):
     img = image.resize((IMG_SIZE, IMG_SIZE))
@@ -51,18 +60,22 @@ def predict(image):
     }
 
 
-demo = gr.Interface(
-    fn=predict,
-    inputs=gr.Image(type='pil', label='Upload a food photo'),
-    outputs=gr.Label(num_top_classes=3, label='Top 3 Predictions'),
-    title='Food Image Classifier — 101 Categories',
-    description=(
-        'Upload any food photo and the model identifies it from 101 categories. '
-        'Built with MobileNetV2 transfer learning trained on the Food-101 dataset. '
-        'Shows top 3 predictions with confidence scores.'
-    ),
-    examples=[],
-)
+with gr.Blocks(theme=gr.themes.Soft()) as demo:
+    gr.Markdown("# Food Image Classifier — 101 Categories")
+    gr.Markdown(
+        "Upload any food photo and the model identifies it from 101 categories. "
+        "Built with MobileNetV2 transfer learning trained on the Food-101 dataset. "
+        "Shows top 3 predictions with confidence scores."
+    )
+
+    with gr.Row():
+        input_image = gr.Image(type='pil', label='Upload a food photo')
+        output_label = gr.Label(num_top_classes=3, label='Top 3 Predictions')
+
+    input_image.change(fn=predict, inputs=input_image, outputs=output_label)
+
+    with gr.Accordion("Supported foods — all 101 categories", open=False):
+        gr.Markdown(CLASSES_MD)
 
 if __name__ == '__main__':
-    demo.launch(theme=gr.themes.Soft())
+    demo.launch()
