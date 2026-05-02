@@ -173,6 +173,8 @@ I selected Colab for speed. The main risk was session disconnection after ~90 mi
 
 During training I also hit RAM crashes on the Colab free tier caused by loading the full 75,750-image dataset into memory each epoch. I resolved this by capping `steps_per_epoch=500` and `validation_steps=100` in `model.fit()`, which limits each epoch to 500 training batches (8,000 images) rather than the full 4,734 steps. Because each capped epoch only covers ~10.6% of the training data, I increased the total epoch count from 10 to 50 so the model still sees the equivalent of ~5 full passes through the dataset. Early stopping with `patience=3` ensures training halts as soon as validation accuracy plateaus, so the full 50 epochs will rarely all run.
 
+I also removed `.cache()` from both the training and validation `tf.data` pipelines. Caching pre-loads the entire dataset into CPU RAM, which exceeded the Colab free tier's memory limit and caused crashes. Without caching, images are loaded and preprocessed on the fly each epoch — slightly slower per step, but stable throughout the full training run.
+
 ---
 
 ## 6. Training
