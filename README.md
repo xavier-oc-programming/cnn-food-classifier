@@ -171,7 +171,7 @@ Before training I benchmarked three environments to choose the most efficient op
 
 I selected Colab for speed. The main risk was session disconnection after ~90 minutes of inactivity, so I implemented checkpoint saving after every epoch using `tf.keras.callbacks.ModelCheckpoint`. If the session dropped, training resumed from the last saved checkpoint rather than starting from scratch. To prevent the session timing out due to inactivity, I ran a separate [mouse jiggler program](#) I built — it moves the cursor in a small square and clicks every 2 seconds, keeping the session active throughout training.
 
-During training I also encountered GPU memory overflow on the T4 with a batch size of 32 — loading 32 images at 224×224×3 alongside the MobileNetV2 activations exceeded available VRAM. Reducing the batch size to 16 resolved the issue without meaningfully affecting convergence.
+During training I also hit RAM crashes on the Colab free tier caused by loading the full 75,750-image dataset into memory each epoch. I resolved this by capping `steps_per_epoch=500` and `validation_steps=100` in `model.fit()`, which limits each epoch to 500 training batches and 100 validation batches rather than exhausting the full dataset. This kept memory usage stable throughout the run without significantly affecting convergence.
 
 ---
 
@@ -182,7 +182,9 @@ During training I also encountered GPU memory overflow on the T4 with a batch si
 | Parameter | Value |
 |---|---|
 | Epochs | 10 (with early stopping, patience=3) |
-| Batch size | 16 |
+| Batch size | 32 |
+| Steps per epoch | 500 |
+| Validation steps | 100 |
 | Optimizer | Adam |
 | Learning rate | 0.001 |
 | Loss function | sparse_categorical_crossentropy |
