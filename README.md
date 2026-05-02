@@ -182,7 +182,7 @@ During training I also hit RAM crashes on the Colab free tier caused by loading 
 | Parameter | Value |
 |---|---|
 | Epochs | 10 (with early stopping, patience=3) |
-| Batch size | 32 |
+| Batch size | 16 |
 | Steps per epoch | 500 |
 | Validation steps | 100 |
 | Optimizer | Adam |
